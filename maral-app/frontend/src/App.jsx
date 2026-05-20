@@ -5,7 +5,7 @@ import CargaRapida from "./screens/CargaRapida";
 import KPIs from "./screens/KPIs";
 import Evaluador from "./screens/Evaluador";
 
-const API = import.meta.env.VITE_API_URL || "http://localhost:3000";
+const API = import.meta.env.VITE_API_URL || "https://maral-api.onrender.com";
 
 export default function App() {
   const [screen, setScreen] = useState("dashboard");
