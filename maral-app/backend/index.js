@@ -6,7 +6,91 @@ const jwt = require('jsonwebtoken');
 const app = express();
 app.use(cors());
 app.use(express.json());
+// SETUP TEMPORAL MARAL — crear tablas iniciales y usuario admin
+app.get('/setup-maral', async (req, res) => {
+  try {
+    await pool.query(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp";`);
 
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS usuarios (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        nombre VARCHAR(100) NOT NULL,
+        email VARCHAR(150) UNIQUE NOT NULL,
+        rol VARCHAR(20) NOT NULL CHECK (rol IN ('admin','operativo')),
+        activo BOOLEAN DEFAULT true,
+        password VARCHAR(200) NOT NULL
+      );
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS lotes (
+        id SERIAL PRIMARY KEY,
+        codigo VARCHAR(100) UNIQUE NOT NULL,
+        etapa VARCHAR(50) NOT NULL,
+        cantidad INTEGER DEFAULT 0,
+        peso_entrada NUMERIC DEFAULT 0,
+        peso_actual NUMERIC DEFAULT 0,
+        costo_compra NUMERIC DEFAULT 0,
+        fecha_ingreso DATE DEFAULT CURRENT_DATE,
+        activo BOOLEAN DEFAULT true
+      );
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS pesadas (
+        id SERIAL PRIMARY KEY,
+        lote_id INTEGER REFERENCES lotes(id),
+        fecha DATE DEFAULT CURRENT_DATE,
+        peso_promedio NUMERIC DEFAULT 0,
+        cantidad INTEGER DEFAULT 0,
+        observacion TEXT
+      );
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS ventas (
+        id SERIAL PRIMARY KEY,
+        lote_id INTEGER REFERENCES lotes(id),
+        fecha DATE DEFAULT CURRENT_DATE,
+        tipo VARCHAR(50) DEFAULT 'Venta',
+        cantidad INTEGER DEFAULT 0,
+        kg NUMERIC DEFAULT 0,
+        precio_kg NUMERIC DEFAULT 0,
+        total_bruto NUMERIC DEFAULT 0,
+        comprador VARCHAR(150)
+      );
+    `);
+
+    await pool.query(`
+      INSERT INTO usuarios (nombre, email, rol, password, activo)
+      VALUES ('Hernan', 'admin@maral.com', 'admin', '1234', true)
+      ON CONFLICT (email) DO UPDATE
+      SET password = '1234', activo = true, rol = 'admin';
+    `);
+
+    await pool.query(`
+      INSERT INTO lotes (codigo, etapa, cantidad, peso_entrada, peso_actual, costo_compra, fecha_ingreso, activo)
+      VALUES 
+      ('RC-2605-01', 'Recría', 11, 160.5, 160.5, 10592400, '2026-05-11', true),
+      ('RC-2604-01', 'Recría', 5, 184, 184, 3896200, '2026-04-29', true),
+      ('FT-ACTUAL-01', 'Feedlot', 8, 215.8, 215.8, 7769700, '2026-03-20', true)
+      ON CONFLICT (codigo) DO NOTHING;
+    `);
+
+    res.json({
+      ok: true,
+      mensaje: 'Setup MARAL ejecutado correctamente',
+      usuario: 'admin@maral.com',
+      password: '1234'
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      ok: false,
+      error: error.message
+    });
+  }
+});
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 const auth = (req, res, next) => {
